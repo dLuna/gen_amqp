@@ -41,7 +41,7 @@
          create_fanout/2, create_topic/2,
          subscribed_queue/2, subscribed_queue/3,
          get/2, write/3, write/4, ack/2, reject/2,
-         subscribe_nocreate/3, unsubscribe_all/1
+         subscribe_nocreate/3, unsubscribe/2, unsubscribe_all/1
         ]).
 -export_type([connection/0, message_tag/0, channel_tag/0]).
 
@@ -421,7 +421,12 @@ subscribe_nocreate(AmqpConn = #gen_amqp_conn{main_channel = Channel},
     end,
     AmqpConn#gen_amqp_conn{consumer_tags = [{Q, Tag} | AmqpConn#gen_amqp_conn.consumer_tags]}.
 
-unsubscribe(AmqpConn = #gen_amqp_conn{main_channel = Channel}, Tag) ->
+unsubscribe(AmqpConn, Q) ->
+    {value, {Q, Tag}} =
+        lists:keysearch(Q, 1, AmqpConn#gen_amqp_conn.consumer_tags),
+    unsubscribe_by_tag(AmqpConn, Tag).
+
+unsubscribe_by_tag(AmqpConn = #gen_amqp_conn{main_channel = Channel}, Tag) ->
     amqp_channel:call(Channel, #'basic.cancel'{consumer_tag = Tag}),
     receive
         %% XXX: Can the cancel return something else?  If so
@@ -435,7 +440,7 @@ unsubscribe(AmqpConn = #gen_amqp_conn{main_channel = Channel}, Tag) ->
 
 unsubscribe_all(AmqpConn = #gen_amqp_conn{consumer_tags = Tags}) ->
     lists:foreach(fun({_Q, Tag}) ->
-                          unsubscribe(AmqpConn, Tag)
+                          unsubscribe_by_tag(AmqpConn, Tag)
                   end,
                   Tags),
     AmqpConn#gen_amqp_conn{consumer_tags = []}.
